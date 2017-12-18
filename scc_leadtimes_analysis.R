@@ -8,6 +8,9 @@ library(tidyverse)
 library(ggplot2)
 library(lubridate)
 library(stringr)
+library(officer)
+library(rvg)
+library(flextable)
 library(here)
 
 # Set Working Directory
@@ -64,6 +67,10 @@ USI <- USI[! grepl(" test ", USI$post_as, ignore.case = TRUE), ]
 USI$lead_time <- USI$start_date - USI$date_booked
 SV$lead_time <- SV$meeting_dates_preferred_start - SV$created
 
+# Remove any events in SV that have no preferred start date
+
+SV <- SV %>% drop_na(meeting_dates_preferred_start)
+
 # Create USI data subsets
 
 leadsource_subset <- subset(USI, USI$lead_source == "Edmonton Tourism")
@@ -81,61 +88,132 @@ convcentre_subset <- subset(SV, SV$convention_center == "Yes")
 compare_data <- merge(USI, SV, by = c("lead_id"), suffixes = c("_USI", "_SV"))
 compare_data$SVtoUSI_leadtime <- compare_data$date_booked - compare_data$tentative_lead_date
 
-# Summary Stats
+# Overall Summary Stats
+
+USIleadtime_all <- USI %>%
+  summarise(Lead_Time = "USI Lead Time",
+            Mean = round(mean(lead_time), digits = 0),
+            Median = round(median(lead_time), digits = 0),
+            Number_of_Events = n())
+
+SVleadtime_all <- SV %>%
+  summarise(Lead_Time = "SV Lead Time",
+            Mean = round(mean(lead_time), digits = 0),
+            Median = round(median(lead_time), digits = 0),
+            Number_of_Events = n())
+
+compareleadtime_all <- compare_data %>%
+  summarise(Lead_Time = "Internal Lead Time",
+            Mean = round(mean(SVtoUSI_leadtime), digits = 0),
+            Median = round(median(SVtoUSI_leadtime), digits = 0),
+            Number_of_Events = n())
+
+all_leadtime <- rbind(USIleadtime_all, SVleadtime_all, compareleadtime_all)
+
+# Flextable
+
+ft_leadtimeall <- flextable(all_leadtime) %>%
+  add_header(top = TRUE, Lead_Time = "Lead Time Summary Statistics (All Data)",
+             Mean = "", Median = "", Number_of_Events = "") %>%
+  merge_at(i = 1, j = 1:4, part = "header") %>%
+  fontsize(part = "header", size = 20) %>%
+  bold(part = "header") %>%
+  align(align = "center", part = "all") %>%
+  padding(padding = 3, part = "all") %>%
+  autofit() %>%
+  width(j = 1, width = 3) %>%
+  width(j = 2, width = 1.5) %>%
+  width(j = 3, width = 1.5) %>%
+  width(j = 4, width = 3)
+
+# Summary Stats (lead_source = ET, conv_center = yes)
 
 USIleadtime_summary <- leadsource_subset %>%
   summarise(Lead_Time = "USI Lead Time",
-            Mean = mean(lead_time),
+            Mean = round(mean(lead_time), digits = 0),
             Median = median(lead_time),
             Number_of_Events = n())
 
 SVleadtime_summary <- convcentre_subset %>%
   summarise(Lead_Time = "SV Lead Time",
-            Mean = mean(lead_time),
+            Mean = round(mean(lead_time), digits = 0),
             Median = median(lead_time),
             Number_of_Events = n())
 
 compareleadtime_summary <- compare_data %>%
   summarise(Lead_Time = "Internal Lead Time",
-            Mean = mean(SVtoUSI_leadtime),
+            Mean = round(mean(SVtoUSI_leadtime), digits = 0),
             Median = median(SVtoUSI_leadtime),
             Number_of_Events = n())
 
 summary_leadtime <- rbind(USIleadtime_summary, SVleadtime_summary, compareleadtime_summary)
 
+# Flextable
+
+ft_leadtimesummary <- flextable(summary_leadtime) %>%
+  add_header(top = TRUE, Lead_Time = "Lead Time Summary Statistics",
+             Mean = "", Median = "", Number_of_Events = "") %>%
+  merge_at(i = 1, j = 1:4, part = "header") %>%
+  fontsize(part = "header", size = 20) %>%
+  bold(part = "header") %>%
+  align(align = "center", part = "all") %>%
+  padding(padding = 3, part = "all") %>%
+  autofit() %>%
+  width(j = 1, width = 3) %>%
+  width(j = 2, width = 1.5) %>%
+  width(j = 3, width = 1.5) %>%
+  width(j = 4, width = 3)
+
 # Breakdowns by event year and event month
 
 leadsource_subset$event_year <- year(leadsource_subset$start_date)
 leadsource_subset$year_booked <- year(leadsource_subset$date_booked)
+USI$year_booked <- year(USI$date_booked)
 
 convcentre_subset$event_year <- year(convcentre_subset$meeting_dates_preferred_start)
 convcentre_subset$lead_year <- year(convcentre_subset$tentative_lead_date)
 
+# Tentative Counts from SV
+
+convcentre_subset$tld <- is.na(convcentre_subset$tentative_lead_date)
+convcentre_subset$created_year <- year(convcentre_subset$created)
+
+tentative_counts <- subset(convcentre_subset, convcentre_subset$created_year == 2017)
+
+event_counts_year <- convcentre_subset %>%
+  group_by(lead_year) %>%
+  summarise(number_of_events = n())
+
+# USI lead source ET or not
+
+USI$leadsource_ET <- USI$lead_source == "Edmonton Tourism"
+
 # Average Lead Time by Year Booked Bar Chart ----------------------------------------------------------
 
-leadsource_subset %>%
-  group_by(year_booked) %>%
+USI_yearbookedmean <- USI %>%
+  group_by(year_booked, leadsource_ET) %>%
   summarise(mean_lead_time = mean(lead_time)) %>%
-  ggplot(aes(x = year_booked, y = mean_lead_time)) +
-  geom_bar(aes(), stat = "identity") +
+  ggplot(aes(x = year_booked, y = mean_lead_time, fill = leadsource_ET)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+#  scale_fill_manual(values = "chartreuse3", "goldenrod1", "darkblue") +
   ggtitle("Lead Time by Year Booked (USI)") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
 # Lead Time by Date Entered in System Scatterplots ---------------------------------------------------------------------------
 
-leadsource_subset %>%
+USI_datebooked <- USI %>%
   ggplot(aes(x = date_booked, y = lead_time)) +
-  geom_point(aes(), stat = "identity") +
+  geom_point(aes(colour = factor(leadsource_ET)), stat = "identity") +
   ggtitle("Lead Time by Date Booked (USI)") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
-convcentre_subset %>%
+SV_datecreated <- SV %>%
   ggplot(aes(x = created, y = lead_time)) +
-  geom_point(aes(), stat = "identity") +
+  geom_point(aes(colour = factor(convention_center)), stat = "identity") +
   ggtitle("Lead Time by Created Date (SV)") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
-compare_data %>%
+matched_eventdate <- compare_data %>%
   ggplot(aes(x = start_date, y = SVtoUSI_leadtime)) +
   geom_point(aes(), stat = "identity") +
   ggtitle("Lead Time between SV and USI by Event Date") +
@@ -143,13 +221,13 @@ compare_data %>%
 
 # Lead Time by Year Entered in System Scatterplots ---------------------------------------------------------------------------
 
-leadsource_subset %>%
+USI_yearbooked <- leadsource_subset %>%
   ggplot(aes(x = year_booked, y = lead_time)) +
   geom_point(aes(), stat = "identity") +
   ggtitle("Lead Time by Year Booked (USI)") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
-convcentre_subset %>%
+SV_leadyear <- convcentre_subset %>%
   ggplot(aes(x = lead_year, y = lead_time)) +
   geom_point(aes(), stat = "identity") +
   ggtitle("Lead Time by Lead Year (SV)") +
@@ -157,13 +235,13 @@ convcentre_subset %>%
 
 # Lead Time by Event Date Scatterplots ---------------------------------------------------------------------------
 
-leadsource_subset %>%
+USI_startdate <- leadsource_subset %>%
   ggplot(aes(x = start_date, y = lead_time)) +
   geom_point(aes(), stat = "identity") +
   ggtitle("Lead Time by Start Date (USI)") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
-convcentre_subset %>%
+SV_startdate <- convcentre_subset %>%
   ggplot(aes(x = meeting_dates_preferred_start, y = lead_time)) +
   geom_point(aes(), stat = "identity") +
   ggtitle("Lead Time by Preferred Start Date (SV)") +
@@ -171,7 +249,7 @@ convcentre_subset %>%
 
 # Average Lead Time Bar Chart ---------------------------------------------------------------------------
 
-convcentre_subset %>%
+SV_datecreatedmean <- convcentre_subset %>%
   group_by(created) %>%
   summarise(mean_lead_time = mean(lead_time)) %>%
   ggplot(aes(x = created, y = mean_lead_time)) +
@@ -181,19 +259,19 @@ convcentre_subset %>%
 
 # Line Charts ---------------------------------------------------------------------------
 
-leadsource_subset %>%
+USI_datebookedline <- leadsource_subset %>%
   ggplot(aes(x = date_booked)) +
   geom_line(aes(y = lead_time), stat = "identity") +
   ggtitle("Lead Time by Date Booked (USI)") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
-convcentre_subset %>%
+SV_datecreatedline <- convcentre_subset %>%
   ggplot(aes(x = created)) +
   geom_line(aes(y = lead_time), stat = "identity") +
   ggtitle("Lead Time by Created Date (SV)") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
-compare_data %>%
+matched_startdateline <- compare_data %>%
   ggplot(aes(x = start_date)) +
   geom_line(aes(y = SVtoUSI_leadtime), stat = "identity") +
   ggtitle("Internal Lead Time by Event Date") +
@@ -211,19 +289,221 @@ compare_data %>%
   ggtitle("Internal Lead Time by Date Booked") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
-compare_data %>%
+matched_dateentered <- compare_data %>%
   ggplot(aes()) +
   geom_line(aes(x = date_booked, y = SVtoUSI_leadtime), stat = "identity", colour = "blue") +
   geom_line(aes(x = created, y = SVtoUSI_leadtime), stat = "identity", colour = "red") +
-  ggtitle("Internal Lead Time by Date Booked") +
+  ggtitle("Comparison of Internal Lead Time") +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
 
+# Important Insights ---------------------------------------------------------------------------
 
+# Set font style
 
+text_prop <- fp_text(font.size = 16)
+level_1 <- fp_text(font.size = 14, bold = TRUE)
+level_2 <- fp_text(font.size = 14)
+level_3 <- fp_text(font.size = 12)
 
+# Build Slide Deck
 
+ppt <- read_pptx(file.path("V:", "Economic Intelligence", "Shaw Conference Centre",
+                            "Projects", "Discount Analysis", "template.pptx"))
 
-
-
-
+ppt <- ppt %>%
+  
+  # Title Slide
+  add_slide(layout = "Title Slide", master = "Office Theme") %>%
+  ph_with_text(type = "ctrTitle", str = "Lead Times Analysis") %>% 
+  ph_with_text(type = "subTitle", str = "USI & Simple View Comparison") %>%
+  
+  # Definitions Slide
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "body") %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "Mean - the average of all observation values",
+              style = level_1) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "Median - the value that is the midpoint of the observations when they are sorted from smallest to largest",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "Can be helpful to show if the data is skewed to one side, meaning that more of the data is closer to the maximum value or the minimum value in the data set",
+              style = level_2) %>%
+  ph_add_par(level = 3) %>%
+  ph_add_text(str = "If median is close to the max observation value, most of the observations appear closer to the maximum observation value in the data set.",
+              style = level_3) %>%
+  ph_add_par(level = 3) %>%
+  ph_add_text(str = "If median is close to the min observation value, most of the observations appear closer to the minimum observation value in the data set.",
+              style = level_3) %>%
+  ph_with_text(type = "title", index = 1, str = "Definitions") %>%
+  ph_with_text(type = "sldNum", str = "1" ) %>%
+  
+  # Data Description Slide
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "body") %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "Data from USI",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "542 conventions (of which 117 have a lead source of Edmonton Tourism)",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "Data from Simple View",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "1295 events (of which 223 asked for a convention center)",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "Any events with no preferred start date were eliminated from analysis",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "Data that could be matched by event start date and account name between USI and Simple View",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "37 events",
+              style = level_2) %>%
+  ph_with_text(type = "title", index = 1, str = "Data Utilized") %>%
+  ph_with_text(type = "sldNum", str = "2" ) %>%
+  
+  # Variables created/added for analysis Slide
+  
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "body") %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "USI_lead_time",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "= start_date - date_booked",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "Number of days between being entered in USI and the event date",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "SV_lead_time",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "= meeting_dates_preferred_start - created",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "Number of days between being entered into Simple View and the event date",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "event_year",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "= year of start_date (for USI) or meeting_dates_preferred_start (for Simple View)",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "The year an event took place",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "year_booked",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "= year of date_booked (USI)",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "The year an event was booked in USI",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "lead_year",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "= year of tentative_lead_date (Simple View)",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "The year of a tentative lead in Simple View",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "created_year",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "= year of created (Simple View)",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "The year an event was created in Simple View",
+              style = level_2) %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "leadsource_ET",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "= is the lead source (USI) Edmonton Tourism?",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "True or False depending on if the lead source in USI is Edmonton Tourism or not",
+              style = level_2) %>%
+  ph_with_text(type = "title", index = 1, str = "Variables Added for Analysis") %>%
+  ph_with_text(type = "sldNum", str = "4" ) %>%
+  
+  # Expectations Slide
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "body") %>%
+  ph_add_par(level = 1) %>%
+  ph_add_text(str = "A decrease in lead times",
+              style = level_1) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "Could be the result of the process change that has Edmonton Tourism managing the lead creation process, could be that overall lead times are shrinking in the market, or could be a combination of factors",
+              style = level_2) %>%
+  ph_with_text(type = "title", index = 1, str = "Data Expectations") %>%
+  ph_with_text(type = "sldNum", str = "5" ) %>%
+  
+  # Summary Slide
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "body") %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "From the analysis completed, there is no clear decrease in lead times over the years for which data is available in either USI or Simple View.",
+              style = level_2) %>%
+  ph_add_par(level = 2) %>%
+  ph_add_text(str = "This does not necessarily mean that lead times are not decreasing, but it may be too early to view such an effect in the data.",
+              style = level_2) %>%
+  ph_with_text(type = "title", index = 1, str = "Summary of Results") %>%
+  ph_with_text(type = "sldNum", str = "6" ) %>%
+  
+  # Summary lead times (All Data)
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "title") %>%
+  ph_add_par() %>%
+  ph_add_text(str = "This table shows lead times for all conventions from USI and all events from Simple View.",
+              type = "title", style = text_prop) %>%
+  ph_with_flextable(value = ft_leadtimeall, type = "body", index = 1) %>%
+  ph_with_text(type = "sldNum", str = "1" ) %>%
+  
+  # Summary lead times (Subsets)
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "title") %>%
+  ph_add_par() %>%
+  ph_add_text(str = "This table shows conventions from USI with lead source Edmonton Tourism, and all events from Simple View that asked for a convention center. As expected, mean and median USI lead times are higher than those in Simple View.",
+              type = "title", style = text_prop) %>%
+  ph_with_flextable(value = ft_leadtimesummary, type = "body", index = 1) %>%
+  ph_with_text(type = "sldNum", str = "1" ) %>%
+  
+  # USI average yearly lead times bar chart
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "title") %>%
+  ph_add_par() %>%
+  ph_add_text(str = "Average lead time per year during which the event was booked, grouped by whether the lead was from Edmonton Tourism or not.",
+              type = "title", style = text_prop) %>%
+  ph_with_vg(code = print(USI_yearbookedmean), type = "body", index = 1) %>%
+  ph_with_text(type = "sldNum", str = "1" ) %>%
+  
+  # USI lead times scatterplot
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "title") %>%
+  ph_add_par() %>%
+  ph_add_text(str = "Lead time shown relative to the date the event was entered into USI, grouped by whether the lead was from Edmonton Tourism or not.",
+              type = "title", style = text_prop) %>%
+  ph_with_vg(code = print(USI_datebooked), type = "body", index = 1) %>%
+  ph_with_text(type = "sldNum", str = "1" ) %>%
+  
+  # Simple View lead times scatterplot
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "title") %>%
+  ph_add_par() %>%
+  ph_add_text(str = "Lead time shown relative to the date the event was entered into Simple View, grouped by whether the lead was was for a convention center or not.",
+              type = "title", style = text_prop) %>%
+  ph_with_vg(code = print(SV_datecreated), type = "body") %>%
+  ph_with_text(type = "sldNum", str = "1" ) %>%
+  
+print(ppt, target = "lead_times.pptx") %>%
+  invisible()
 
