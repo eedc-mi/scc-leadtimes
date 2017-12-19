@@ -188,6 +188,30 @@ event_counts_year <- convcentre_subset %>%
 
 USI$leadsource_ET <- USI$lead_source == "Edmonton Tourism"
 
+# Average Lead Time by Class
+
+leadtime_by_class <- leadsource_subset %>%
+  group_by(class) %>%
+  summarise(Mean = round(mean(lead_time), digits = 0),
+            Median = round(median(lead_time), digits = 0),
+            Number_of_Events = n())
+
+# Flextable
+
+ft_leadtimebyclass <- flextable(leadtime_by_class) %>%
+  add_header(top = TRUE, class = "Lead Time by Class",
+             Mean = "", Median = "", Number_of_Events = "") %>%
+  merge_at(i = 1, j = 1:4, part = "header") %>%
+  fontsize(part = "header", size = 20) %>%
+  bold(part = "header") %>%
+  align(align = "center", part = "all") %>%
+  padding(padding = 3, part = "all") %>%
+  autofit() %>%
+  width(j = 1, width = 3) %>%
+  width(j = 2, width = 1.5) %>%
+  width(j = 3, width = 1.5) %>%
+  width(j = 4, width = 3)
+
 # Average Lead Time by Year Booked Bar Chart ----------------------------------------------------------
 
 USI_yearbookedmean <- USI %>%
@@ -433,7 +457,7 @@ ppt <- ppt %>%
   ph_add_text(str = "True or False depending on if the lead source in USI is Edmonton Tourism or not",
               style = level_2) %>%
   ph_with_text(type = "title", index = 1, str = "Variables Added for Analysis") %>%
-  ph_with_text(type = "sldNum", str = "4" ) %>%
+  ph_with_text(type = "sldNum", str = "3" ) %>%
   
   # Expectations Slide
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
@@ -445,7 +469,7 @@ ppt <- ppt %>%
   ph_add_text(str = "Could be the result of the process change that has Edmonton Tourism managing the lead creation process, could be that overall lead times are shrinking in the market, or could be a combination of factors",
               style = level_2) %>%
   ph_with_text(type = "title", index = 1, str = "Data Expectations") %>%
-  ph_with_text(type = "sldNum", str = "5" ) %>%
+  ph_with_text(type = "sldNum", str = "4" ) %>%
   
   # Summary Slide
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
@@ -457,7 +481,7 @@ ppt <- ppt %>%
   ph_add_text(str = "This does not necessarily mean that lead times are not decreasing, but it may be too early to view such an effect in the data.",
               style = level_2) %>%
   ph_with_text(type = "title", index = 1, str = "Summary of Results") %>%
-  ph_with_text(type = "sldNum", str = "6" ) %>%
+  ph_with_text(type = "sldNum", str = "5" ) %>%
   
   # Summary lead times (All Data)
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
@@ -466,7 +490,7 @@ ppt <- ppt %>%
   ph_add_text(str = "This table shows lead times for all conventions from USI and all events from Simple View.",
               type = "title", style = text_prop) %>%
   ph_with_flextable(value = ft_leadtimeall, type = "body", index = 1) %>%
-  ph_with_text(type = "sldNum", str = "1" ) %>%
+  ph_with_text(type = "sldNum", str = "6" ) %>%
   
   # Summary lead times (Subsets)
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
@@ -475,7 +499,16 @@ ppt <- ppt %>%
   ph_add_text(str = "This table shows conventions from USI with lead source Edmonton Tourism, and all events from Simple View that asked for a convention center. As expected, mean and median USI lead times are higher than those in Simple View.",
               type = "title", style = text_prop) %>%
   ph_with_flextable(value = ft_leadtimesummary, type = "body", index = 1) %>%
-  ph_with_text(type = "sldNum", str = "1" ) %>%
+  ph_with_text(type = "sldNum", str = "7" ) %>%
+  
+  # Summary USI lead times by class
+  add_slide(layout = "Title and Content", master = "Office Theme") %>%
+  ph_empty(type = "title") %>%
+  ph_add_par() %>%
+  ph_add_text(str = "This table shows USI lead times by class.",
+              type = "title", style = text_prop) %>%
+  ph_with_flextable(value = ft_leadtimebyclass, type = "body", index = 1) %>%
+  ph_with_text(type = "sldNum", str = "8" ) %>%
   
   # USI average yearly lead times bar chart
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
@@ -484,7 +517,7 @@ ppt <- ppt %>%
   ph_add_text(str = "Average lead time per year during which the event was booked, grouped by whether the lead was from Edmonton Tourism or not.",
               type = "title", style = text_prop) %>%
   ph_with_vg(code = print(USI_yearbookedmean), type = "body", index = 1) %>%
-  ph_with_text(type = "sldNum", str = "1" ) %>%
+  ph_with_text(type = "sldNum", str = "9" ) %>%
   
   # USI lead times scatterplot
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
@@ -493,7 +526,7 @@ ppt <- ppt %>%
   ph_add_text(str = "Lead time shown relative to the date the event was entered into USI, grouped by whether the lead was from Edmonton Tourism or not.",
               type = "title", style = text_prop) %>%
   ph_with_vg(code = print(USI_datebooked), type = "body", index = 1) %>%
-  ph_with_text(type = "sldNum", str = "1" ) %>%
+  ph_with_text(type = "sldNum", str = "10" ) %>%
   
   # Simple View lead times scatterplot
   add_slide(layout = "Title and Content", master = "Office Theme") %>%
@@ -502,7 +535,7 @@ ppt <- ppt %>%
   ph_add_text(str = "Lead time shown relative to the date the event was entered into Simple View, grouped by whether the lead was was for a convention center or not.",
               type = "title", style = text_prop) %>%
   ph_with_vg(code = print(SV_datecreated), type = "body") %>%
-  ph_with_text(type = "sldNum", str = "1" ) %>%
+  ph_with_text(type = "sldNum", str = "11" ) %>%
   
 print(ppt, target = "lead_times.pptx") %>%
   invisible()
