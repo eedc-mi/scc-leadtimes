@@ -224,24 +224,17 @@ ft_leadtimebyclass <- flextable(leadtime_by_class) %>%
 
 # Average Lead Time by Year Booked Bar Chart ----------------------------------------------------------
 
-USI_yearbookedmean <- USI %>%
-  group_by(year_booked, leadsource_ET) %>%
-  summarise(mean_lead_time = mean(lead_time)) %>%
-  ggplot(aes(x = year_booked, y = mean_lead_time, fill = leadsource_ET)) +
-  geom_bar(stat = "identity", position = position_dodge()) +
-  labs(x = "Year Booked", y = "Average Lead Time", fill = "Lead Source: Edmonton Tourism") +
-  ggtitle("Average Lead Time by Year Booked (USI)") +
-  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-        legend.position = "top", legend.direction = "horizontal")
+USI_yearbookedmean <-  
 
 # Lead Time by Date Entered in System Scatterplots ---------------------------------------------------------------------------
 
 USI_datebooked <- USI %>%
   filter(year_booked == 2015 | year_booked == 2016 | year_booked == 2017) %>%
   ggplot(aes(x = date_booked, y = lead_time,
-             colour = leadsource_ET, stat = "identity")) +
+             colour = leadsource_ET)) +
   geom_point() +
-  labs(x = "Year Booked", y = "Lead Time", colour = "Lead Source: Edmonton Tourism") +
+  scale_colour_discrete(labels = c("Other Source", "Edmonton Tourism")) +
+  labs(x = "Year Booked", y = "Lead Time", colour = "Lead Source") +
   ggtitle("Lead Time by Date Booked (USI)") +
   geom_smooth(method = lm, se = FALSE) +
   theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
@@ -250,7 +243,7 @@ USI_datebooked <- USI %>%
 SV_datecreated <- SV %>%
   filter(created_year == 2015 | created_year == 2016 | created_year == 2017) %>%
   ggplot(aes(x = created, y = lead_time,
-             colour = convention_center, stat = "identity")) +
+             colour = convention_center)) +
   geom_point() +
   labs(x = "Created Date", y = "Lead Time", colour = "Asked for a convention center") +
   ggtitle("Lead Time by Created Date (SV)") +
