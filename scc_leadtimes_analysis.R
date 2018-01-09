@@ -224,7 +224,16 @@ ft_leadtimebyclass <- flextable(leadtime_by_class) %>%
 
 # Average Lead Time by Year Booked Bar Chart ----------------------------------------------------------
 
-USI_yearbookedmean <-  
+USI_yearbookedmean <- USI %>%
+  group_by(year_booked, leadsource_ET) %>%
+  summarise(mean_lead_time = mean(lead_time)) %>%
+  ggplot(aes(x = year_booked, y = mean_lead_time, fill = leadsource_ET)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_discrete(labels = c("Other Source", "Edmonton Tourism")) +
+  labs(x = "Year Booked", y = "Average Lead Time", fill = "Lead Source") +
+  ggtitle("Average Lead Time by Year Booked (USI)") +
+  theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+  legend.position = "top", legend.direction = "horizontal")
 
 # Lead Time by Date Entered in System Scatterplots ---------------------------------------------------------------------------
 
